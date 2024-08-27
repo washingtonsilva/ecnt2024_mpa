@@ -15,8 +15,9 @@ entendimento de conceitos econométricos aplicados às finanças.
   - **raw/**: Dados brutos, não processados.
   - **clean/**: Dados processados, prontos para análise
 
-- **notebooks/**: Contém os notebooks RMarkdown utilizados durante o curso.
+- **notebooks/**: Contém os R notebooks utilizados durante o curso.
 
-- **quarto/**: Diretório contendo os relatórios gerados com Quarto.
+- **quarto/**: Diretório contendo os relatórios gerados com o 
+sistema [Quarto](https://quarto.org/docs/guide/).
 
 - **src/**: Scripts R utilizados para manipulação de dados.
