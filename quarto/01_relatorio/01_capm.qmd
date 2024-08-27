@@ -1,0 +1,295 @@
+---
+title: "Estimação do Modelo CAPM"
+subtitle: "Working Paper"
+author: Washington Santos da Silva
+lang: pt
+format:
+  pdf:
+    documentclass: article
+    papersize: a4paper
+    fontsize: 12pt
+    linestretch: 1.0
+    number-sections: true
+    indent: true
+    tbl-pos: 'H'
+    fig-pos: 'H'
+    colorlinks: TRUE
+    linkcolor: blue
+    link-citations: true
+    latex-auto-install: true
+    include-in-header: 
+      - text: |
+          \usepackage{indentfirst}
+bibliography: referencias.bibtex
+csl: associacao-brasileira-de-normas-tecnicas-ipea.csl
+crossref:
+  fig-prefix: 'Fig.'
+  tbl-prefix: 'Tab.'
+execute:
+  echo: false
+  message: false
+  warning: false
+  enabled: true
+editor: source
+keep-tex: true
+abstract: |
+  Este modelo de um artigo tem como objetivo ilustrar a utilização do sistema 
+  Quarto para a criação de um artigo científico em formato PDF. 
+  O uso do sistema Quarto permite uma integração eficiente entre código, 
+  texto e resultados, facilitando a criação de documentos reprodutíveis e 
+  de alta qualidade. Este modelo serve como uma ferramenta prática para a   
+  adquisição de habilidades essenciais na comunicação de resultados de 
+  pesquisa quantitativa. \linebreak \textbf{Palavras-chave:} Sistema de 
+  Publicação Quarto, Pesquisa Reprodutível.
+---
+
+
+
+```{r}
+#| label: setup 
+
+# pacotes utilizados
+library(here)         # Permite utilizar caminhos relativos no projeto
+library(tidyverse)    # Metapacote que inclui dplyr, ggplot2, etc.
+library(gtsummary)    # para tabelas formatadas
+library(modelsummary) # para tabelas formatadas
+library(kableExtra)   # para tabelas formatadas
+library(moments)      # assimetria e curtose
+
+
+# importa os dados limpos
+path_clean <- here::here("data/clean/dados_capm_clean.rds")
+dados_capm_retexc <- readr::read_rds(path_clean)
+```
+
+
+
+
+# Introdução {#sec-intro}
+
+Na @sec-intro está contida a introdução do artigo.
+
+- Explique por que o tema é interessante/importante.
+
+- **Declare claramente o objetivo de pesquisa e descreva (em termos não técnicos) como você irá alcançá-lo**.
+- Descreva o que outros já fizeram e como o seu trabalho se encaixa nisso.
+- Antecipe os resultados.
+
+
+
+# Revisão da Literatura {#sec-revlit}
+
+O Modelo de Precificação de Ativos de Capital (*Capital Asset Pricing Model*, 
+CAPM) é um dos modelos mais influentens no campo das finanças, fornecendo 
+uma estrutura para entender a relação entre risco e retorno dos ativos 
+financeiros. As origens do CAPM remontam aos trabalhos seminais de William 
+Sharpe, John Lintner, Jan Mossin e Jack Treynor, que contribuíram 
+significativamente para o desenvolvimento dessa teoria.
+
+William Sharpe introduziu o CAPM em 1964, propondo que o retorno esperado 
+de um ativo financeiro é linearmente relacionado ao seu risco sistemático, 
+medido pelo beta do ativo [@sharpe1964capm]. Em seguida, John Lintner 
+expandiu o modelo, incorporando o conceito de diversificação de portfólios e 
+detalhando como os investidores podem otimizar suas decisões de investimento
+em um mercado competitivo [@lintner1965]. Jan Mossin, em 1966, contribuiu 
+para a formalização do modelo no contexto de equilíbrio de mercado, 
+reforçando sua importância como ferramenta essencial para a precificação 
+e ativos financeiros [@mossin1966capm]. Embora o trabalho de Jack 
+Treynor, desenvolvido em 1961, não tenha sido publicado até muito mais tarde, 
+ele forneceu as bases teóricas cruciais para o desenvolvimento subsequente 
+do CAPM [@treynor1961].
+
+Segundo @sharpe1964capm
+
+Esses trabalhos, em conjunto, estabeleceram os fundamentos do CAPM, que 
+continua a ser amplamente utilizado para a avaliação do custo do capital, 
+análise de portfólios e tomada de decisões de investimento.
+
+
+
+ 
+# Metodologia {#sec-met}
+
+Para estimar o Modelo de Precificação de Ativos de Capital (CAPM) como um 
+modelo de regressão linear simples, seguimos uma abordagem econométrica 
+padrão que envolve a modelagem do retorno de um ativo em função do retorno 
+do mercado. O CAPM sugere que o retorno esperado de um ativo $R_i$ pode 
+ser expresso como uma função linear do retorno esperado do mercado $R_m$, 
+ajustado pelo risco livre de mercado $R_f$. A equação do CAPM é dada por:
+
+$$
+R_i = R_f + \beta_i (R_m - R_f) + \epsilon_i
+$$
+
+sendo $R_i$ o retorno do ativo $i$, $R_f$ a taxa de retorno livre de risco, 
+$\beta_i$ é o coeficiente beta que mede a sensibilidade do retorno do ativo 
+em relação ao retorno do mercado, $R_m$ o retorno do mercado e $\epsilon_i$ 
+o termo de erro, assumido como ruído branco.
+
+Para estimar o coeficiente $\beta_i$ e o intercepto $\alpha_i$, a equação 
+do CAPM pode ser reformulada como um modelo de regressão linear simples:
+
+$$
+r_i - r_f = \alpha_i + \beta_i (r_m - r_f) + \epsilon_i
+$$
+
+A partir dessa reformulação, podemos aplicar o método dos mínimos 
+quadrados ordinários (OLS) para estimar os parâmetros $\alpha_i$ e $\beta_i$. 
+A equação de regressão a ser estimada é:
+
+$$
+y_i = \alpha_i + \beta_i x_i + \epsilon_i
+$$ {#eq-modelo}
+
+sendo $y_i = r_i - r_f$ o excesso de retorno do ativo e $x_i = R_m - R_f$ 
+o excesso de retorno do mercado.
+
+O coeficiente $\beta_i$ é particularmente importante, pois indica como 
+o retorno do ativo se comporta em relação às variações do mercado. Se 
+$\beta_i > 1$, isso sugere que o ativo é mais volátil que o mercado, 
+implicando em maior risco sistemático. Se $\beta_i < 1$, indica menor 
+volatilidade em relação ao mercado, sugerindo menor risco sistemático. 
+Quando $\beta_i = 1$, o retorno do ativo tende a se mover em sincronia 
+com o retorno do mercado, indicando que o ativo possui um risco sistemático 
+equivalente ao do mercado como um todo.
+
+Para a estimação do modelo de regressão (@eq-modelo), utilizamos dados históricos do 
+retorno do ativo e do mercado. A taxa livre de risco $R_f$ é geralmente 
+representada pelo retorno de títulos do governo de curto prazo. Após a 
+estimação, a significância dos coeficientes $\hat{\alpha_i}$ e 
+$\hat{\beta_i}$ é avaliada por meio de testes t, e a adequação do modelo 
+é verificada através do coeficiente de determinação $R^2$ e da análise 
+dos resíduos.
+
+Este procedimento fornece uma estimativa empírica do modelo CAPM, permitindo 
+avaliar se o retorno de um ativo está adequadamente explicado pelo retorno 
+do mercado, ajustado para o risco.
+
+
+
+
+# Dados {#sec-dados}
+
+```{r}
+#| label: tbl-stat
+#| tbl-cap: Estatísticas Descritivas para Retornos Excedentes
+
+# Calcular estatísticas descritivas com duas casas decimais
+estatisticas_ford <- c(
+  round(mean(dados_capm_retexc$retexc_ford, na.rm = TRUE), 2),
+  round(median(dados_capm_retexc$retexc_ford, na.rm = TRUE), 2),
+  round(sd(dados_capm_retexc$retexc_ford, na.rm = TRUE), 2),
+  round(min(dados_capm_retexc$retexc_ford, na.rm = TRUE), 2),
+  round(max(dados_capm_retexc$retexc_ford, na.rm = TRUE), 2),
+  round(kurtosis(dados_capm_retexc$retexc_ford, na.rm = TRUE), 2),
+  round(skewness(dados_capm_retexc$retexc_ford, na.rm = TRUE), 2)
+)
+
+estatisticas_sp500 <- c(
+  round(mean(dados_capm_retexc$retexc_sp500, na.rm = TRUE), 2),
+  round(median(dados_capm_retexc$retexc_sp500, na.rm = TRUE), 2),
+  round(sd(dados_capm_retexc$retexc_sp500, na.rm = TRUE), 2),
+  round(min(dados_capm_retexc$retexc_sp500, na.rm = TRUE), 2),
+  round(max(dados_capm_retexc$retexc_sp500, na.rm = TRUE), 2),
+  round(kurtosis(dados_capm_retexc$retexc_sp500, na.rm = TRUE), 2),
+  round(skewness(dados_capm_retexc$retexc_sp500, na.rm = TRUE), 2)
+)
+
+# Combina os resultados em uma data frame
+estatisticas <- data.frame(
+  Estatísticas = c(
+    "Média",
+    "Mediana",
+    "Desvio Padrão",
+    "Mínimo",
+    "Máximo",
+    "Curtose",
+    "Assimetria"
+  ),
+  Ford = estatisticas_ford,
+  `SP500` = estatisticas_sp500  # Nome da coluna temporariamente como "SP500"
+)
+
+# Criara tabela com kableExtra
+tabela <- estatisticas %>%
+  kbl() %>%
+  kable_classic(full_width = FALSE) %>% 
+  footnote(general_title = "Fonte: ", 
+           general = "Elaborada pelos autores.", 
+           footnote_as_chunk = TRUE)
+
+# exibe a tabela
+tabela
+```
+
+A @tbl-stat exibe estatísticas descritivas dos retornos excedentes da
+Ford e do índice S&P (500).
+
+\pagebreak
+
+A @fig-dispersao exibe um gráfico de dispersão entre os 
+retornos excedentes da Ford e do índice S&P (500)
+
+```{r}
+#| label: fig-dispersao
+#| fig-cap: "Gráfico de Dispersão entre os retornos excedentes da Ford e do índice S&P (500)."
+
+ford_dispersao <-
+  ggplot(
+    dados_capm_retexc,
+    aes(x = retexc_sp500, y = retexc_ford)
+  ) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(
+    title = NULL,
+    caption = "Fonte: Elaborada pelos autores.",
+    x = "Retornos Excedentes do S&P 500 (%)", 
+    y = "Retornos Excedentes da Ford (%)"
+  ) +
+  theme_minimal()
+
+## exibe o gráfico gerado
+ford_dispersao
+```
+
+
+
+# Resultados e Discussão {#sec-resultados}
+
+A @tbl-resultados contém os resultados da estimação do CAPM para os 
+retornos excedentes da Ford usando a metodologia descrita na 
+@sec-met.
+
+```{r}
+#| label: tbl-resultados
+#| tbl-cap: Resultados da Estimação do CAPM
+
+capm_ford <- lm(retexc_ford ~ retexc_sp500, data = dados_capm_retexc)
+
+# Criar a tabela de regressão usando modelsummary
+modelsummary(capm_ford, 
+             output = "latex",
+             statistic = c("conf.int",
+                           "e.p. = {std.error}", 
+                           "t = {statistic}",
+                           "p = {p.value}"),
+             stars = FALSE, 
+             gof_omit = "DF|Deviance|AIC|BIC|Log.Lik.|RMSE",
+              notes = "Fonte: Elaborada pelos autores."
+)
+```
+
+
+
+
+# Conclusões {#sec-conclusoes}
+
+
+
+
+
+# Referências {.unnumbered}
+
+::: {#refs}
+:::

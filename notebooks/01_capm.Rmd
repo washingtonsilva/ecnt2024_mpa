@@ -1,0 +1,398 @@
+---
+title: "R Notebook - Analise e Estimacao do CAPM para Diferentes Ativos"
+author: "Washington S. da Silva"
+output: html_notebook
+---
+
+
+# R Notebooks 
+
+Este é um R Notebook. Quando você executa o código R no notebook, 
+os resultados aparecem abaixo do código.
+
+O código R precisa estar em "pedaços" (*chunks*) em um Notebook R. 
+Logo abaixo, está um exemplo de um pedaço de código R. O código 
+produz uma parábola.
+
+Tente executar este cógdigo, colocando o cursor dentro do **chunk**
+e clicando no botão *Run* (que pode ser acessado pela seta verde 
+no canto superior direito do código ou pelo menu *Run* do RStudio), 
+ou colocando o cursor dentro do código e pressionando *Ctrl+Shift+Enter* (Windows/Linux):
+
+```{r}
+x <- seq(-1, 1, by = 0.01)
+y <- x^2
+plot(x, y, type = "l")
+```
+
+Para ocultar a saída, clique nas setas para expandir/recolher a 
+saída. Para limpar os resultados (ou um erro), clique no 
+botão "x".
+
+Você também pode pressionar *Ctrl+Enter* (Win/Linux) para 
+executar uma linha de código por vez (em vez de todo o bloco).
+
+Adicione um novo pedaço de código R clicando no botão 
+*Insert new code chunk* na barra de ferramentas ou pressionando 
+*Ctrl+Alt+I* (Windows/Linux).
+
+
+
+# Descrição
+
+Este notebook R realiza a análise e estimação do CAPM 
+(*Capital Asset Pricing Model*) para séries de preços de acões, incluindo 
+Ford, General Electric, Microsoft, Oracle e o índice S&P 500. O script busca 
+atualizar o código disponibilizado por Brooks (2019).
+
+
+
+# Pacotes Utilizados 
+
+```{r, warning = FALSE, message = FALSE}
+library(here)      # Permite utilizar caminhos relativos no projeto
+library(tidyverse) # Metapacote que inclui dplyr, ggplot2, etc.
+library(readxl)    # Para importar planilhas Excel
+library(nanoparquet) # Para leitura e escrita de arquivos Parquet
+library(skimr)       # alternativa para summary()
+```
+
+
+
+# 1. Importação dos Dados 
+
+Define o caminho para o arquivo Excel contendo os dados:
+
+```{r}
+path_capm <- here::here("data/raw/capm.xls")
+```
+
+Importa os dados da planilha Excel: 
+
+
+```{r}
+dados_capm <- readxl::read_xls(path_capm)
+```
+
+
+Verifica a estrutura dos dados importados: 
+
+```{r}
+dplyr::glimpse(dados_capm)
+```
+
+
+Gera estatísticas descritivas básicas para os dados:
+
+```{r}
+summary(dados_capm)
+```
+
+
+Apresenta uma visão geral mais detalhada dos dados: 
+
+```{r}
+skimr::skim(dados_capm)
+```
+
+
+
+# 2. Preparação dos Dados 
+
+
+## 2.1 Cálculo dos Retornos Compostos Continuamente (Logaritmícos)
+
+Calcula e adiciona colunas correspondentes aos retornos compostos 
+continuamente (logarítmicos) à data frame: 
+
+```{r}
+dados_capm_retornos <- dados_capm %>% 
+  mutate(
+    ret_sp500 = c(NA, 100 * diff(log(SANDP))),
+    ret_ford = c(NA, 100 * diff(log(FORD))),
+    ret_ge = c(NA, 100 * diff(log(GE))),
+    ret_microsoft = c(NA, 100 * diff(log(MICROSOFT))),
+    ret_oracle = c(NA, 100 * diff(log(ORACLE)))
+  )
+```
+
+
+Verifica a estrutura da nova base de dados com os retornos: 
+
+```{r}
+dplyr::glimpse(dados_capm_retornos)
+```
+
+
+## 2.2. Cálculo dos Retornos Excedentes
+
+Calcula os retornos excedentes para cada ativo, ajustando pela taxa 
+de rendimentos dos títulos do tesouro dos EUA (USTB3M): 
+
+```{r}
+dados_capm_retexc <- dados_capm_retornos %>% 
+  mutate(
+    # ajusta a série anual de rendimentos para base mensal
+    ustb3m = USTB3M / 12,
+    # calcula os retornos excedentes
+    retexc_sp500 = ret_sp500 - ustb3m,
+    retexc_ford = ret_ford - ustb3m,
+    retexc_ge = ret_ge - ustb3m,
+    retexc_microsoft = ret_microsoft - ustb3m,
+    retexc_oracle = ret_oracle - ustb3m
+  )
+```
+
+
+Verifica a estrutura da data frame com os retornos excedentes: 
+
+```{r}
+dplyr::glimpse(dados_capm_retexc)
+```
+
+
+## 2.3. Armazenamento dos Dados Limpos em Diferentes Formatos
+
+
+define um caminho relativo para salvar os dados limpos no formato .rds: 
+
+```{r}
+path_clean <- here::here("data/clean/dados_capm_clean.rds")
+write_rds(dados_capm_retexc, path_clean)
+```
+
+
+define o caminho para salvar os dados limpos no formato .csv: 
+
+```{r}
+path_csv <- here::here("data/clean/dados_capm_clean.csv")
+write_csv(dados_capm_retexc, path_csv)
+```
+
+
+define o caminho para salvar os dados limpos no formato .parquet: 
+
+```{r}
+path_parquet <- here::here("data/clean/dados_capm_clean.parquet") 
+write_parquet(dados_capm_retexc, path_parquet)
+```
+
+
+## 3. Análise exploratória dos dados
+
+Importa os dados limpos no formato .rds para análise: 
+
+```{r}
+path_clean <- here::here("data/clean/dados_capm_clean.rds")
+dados_capm_retexc <- readr::read_rds(path_clean)
+```
+
+remove valores faltantes dos dados para a análise:
+
+```{r}
+dados_capm_retexc <- dados_capm_retexc %>% drop_na()
+dplyr::glimpse(dados_capm_retexc)
+```
+
+
+
+### 3.1 Estatísticas Descritivas
+
+Calcula estatísticas descritivas dos retornos excedentes da Ford: 
+
+```{r}
+dados_capm_retexc %>% 
+  summarise(
+    media = mean(retexc_ford),
+    mediana = median(retexc_ford),
+    desvio_padrao = sd(retexc_ford),
+    minimo = min(retexc_ford),
+    maximo = max(retexc_ford),
+    curtose = fBasics::kurtosis(retexc_ford),
+    assimetria = fBasics::skewness(retexc_ford)
+  ) %>% 
+  pivot_longer(cols = everything(), 
+               names_to = "Estatísticas (Ford)", 
+               values_to = "valor")
+```
+
+
+Calcula estatísticas descritivas dos retornos excedentes do S&P 500: 
+
+```{r}
+dados_capm_retexc %>% 
+  summarise(
+    media = mean(retexc_sp500),
+    mediana = median(retexc_sp500),
+    desvio_padrao = sd(retexc_sp500),
+    minimo = min(retexc_sp500),
+    maximo = max(retexc_sp500),
+    curtose = fBasics::kurtosis(retexc_sp500),
+    assimetria = fBasics::skewness(retexc_sp500)
+  ) %>% 
+  pivot_longer(cols = everything(), 
+               names_to = "Estatísticas (S&P 500)", 
+               values_to = "valor")
+```
+
+
+Gera um gráfico de dispersão dos retornos excedentes da Ford vs. S&P 500:
+
+```{r}
+ford_dispersao <-
+  ggplot(
+    dados_capm_retexc,
+    aes(x = retexc_sp500, y = retexc_ford)
+  ) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(
+    title = "Retornos Excedentes da Ford vs. Retornos Excedentes do S&P 500",
+    caption = "Fonte: Brooks (2019)",
+    x = "Retornos Excedentes do S&P 500 (%)", 
+    y = "Retornos Excedentes da Ford (%)"
+  ) +
+  theme_minimal()
+
+## exibe o gráfico gerado
+ford_dispersao
+```
+
+
+
+## 4. Estimação do modelo CAPM - Ford
+
+Estima o modelo CAPM para os retornos excedentes da Ford:
+
+```{r}
+capm_ford <- lm(retexc_ford ~ retexc_sp500, data = dados_capm_retexc)
+```
+
+
+Exibe o resumo dos resultados da estimação do CAPM para a Ford:
+
+```{r}
+summary(capm_ford)
+```
+
+
+Podemos ver os resultados contidos no objeto `capm_ford` usando 
+a funcão `names` para listar os elementos disponíveis:
+
+```{r}
+names(capm_ford)
+```
+
+`coefficients`: contém os coeficientes estimados do modelo ($\hat{\beta}_0$ e $\hat{\beta}_1$):
+
+```{r}
+capm_ford$coefficients
+```
+
+`residuals`: contém os resíduos da regressão ($\hat{\epsilon}_i = \hat{y_i} - y_i$):
+
+```{r}
+head(capm_ford$residuals)
+```
+
+`fitted.values`: contém os valores previstos ou ajustados pelo 
+modelo ($\hat{y_i}$):
+
+```{r}
+head(capm_ford$fitted.values)
+```
+
+
+Exibe as estimativas por intervalos de confiança dos parâmetros estimados: 
+
+```{r}
+confint(capm_ford)
+```
+
+Podemos usar a função `coefficients` para acessar os coeficientes estimados diretamente no texto, por exemplo: `r capm_ford$coefficients[1]` e `r capm_ford$coefficients[2]`. 
+
+Isto é muito útil para relatórios e apresentações, pois permite que você insira os valores diretamente no texto, sem precisar copiar e colar. Além disso, 
+caso os dados sejam atualizados, as estimativas serão atualizadas 
+automaticamente no texto, o que contribui também para a reprodutibilidade do relatório.
+
+
+
+# 5. Diagnóstico do Modelo via Simulação
+
+
+Como podemos avaliar o modelo CAPM estimado? Uma estratégia envolve 
+usar nossas estimativas dos parâmetros do modelo para gerar dados e 
+verificar se os dados simulados desta forma se parecem com os dados 
+originais dos retornos excedentes da Ford
+
+## Estratégia 2: Simulação dos retornos excedentes da Ford
+
+Uma maneira mais fácil e rápida do que a estratégia que usamos no 
+script R é usar a função `simulate()` que permite simular múltiplas 
+amostras. 
+
+No código abaixo geramos 50 amostras, isto é, simulamos 50 séries 
+dos retornos excedentes da Ford usando o modelo CAPM estimado. 
+Cada série terá o mesmo número de observações que a série original 
+(n = 193). Cada série é simulada usando os valores observados para 
+`retexc_sp500`. O resultado é uma data frame com 50 colunas.
+
+
+Simula os retornos excedentes da Ford com base no modelo estimado:
+
+```{r}
+# Fixa a semente para reprodutibilidade da simulação:
+set.seed(1234)
+
+# Simula os retornos excedentes da Ford com base no modelo capm estimado (50 simulações)
+sim_retexc_ford <- simulate(capm_ford, nsim = 50)
+head(sim_retexc_ford)
+```
+
+Agora, vamos comparar as densidades dos retornos simulados com a 
+densidade dos retornos observados da Ford. Para isso, vamos gerar 
+um gráfico de densidade que mostra a densidade dos retornos 
+observados em azul e as densidades dos retornos simulados em cinza.
+
+```{r}
+# Densidade empírica dos retornos observados da Ford
+plot(density(dados_capm_retexc$retexc_ford), 
+     col = "blue", 
+     main = "Densidade dos Retornos Observados vs Simulados")
+
+# Adiciona as densidades das séries simuladas no gráfico
+for (i in 1:50) {
+  lines(density(sim_retexc_ford[, i]), col = "grey80")
+}
+
+# Adiciona uma legenda para identificar as densidades observadas
+legend("topright", 
+       legend = c("Retornos Observados", "Retornos Simulados"), 
+       col = c("blue", "grey80"), 
+       lty = 1)
+```
+
+Este não parece ser um bom modelo. As densidades dos retornos simulados 
+não se parecem com a densidade dos retornos observados. Isso sugere que 
+o modelo CAPM estimado não é adequado para explicar os retornos excedentes 
+da Ford. Isso pode ser devido a uma série de razões, incluindo a 
+simplicidade do modelo, variáveis omitidas, a presença de heterocedasticidade, 
+a presença de outliers, entre outros fatores.
+
+Essa estratégia de simulação é uma maneira de avaliar a adequação 
+de um modelo de regressão (linear ou não linear) estimado, que não 
+envolve avaliar a qualidade do ajuste de um modelo de regressão, usando 
+apenas o critério da significância estatística dos coeficientes estimados e/ou 
+de testes de hipóteses de diagnóstico dos resíduos, sendo 
+defendida por estatísticos e econometristas como uma abordagem 
+complementar e útil para avaliar a adequação de um modelo estimado.
+
+
+# R Notebook em HTML
+
+Após finalizar a execução de todos os código de interesse anteriores, 
+você pode salvar o notebook em HTML clicando no botão *Preview* na barra de 
+ferramentas do RStudio. O arquivo HTML gerado pode ser compartilhado 
+com outras pessoas, que poderão visualizar os resultados e gráficos 
+sem precisar executar o código R.
+

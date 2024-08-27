@@ -1,0 +1,560 @@
+---
+title: "Modelo de Regressão Linear Simples"
+subtitle: "Aplicações em Finanças"
+author: Seu Nome
+lang: pt
+format:
+  html:
+    theme: cosmos
+    toc: true
+    number-sections: true
+    self-contained: true
+crossref:
+  fig-prefix: 'Fig.'
+  tbl-prefix: 'Tab.'
+execute:
+  echo: false
+  message: false
+  warning: false
+  enabled: true
+editor: source
+bibliography: referencias.bibtex
+csl: associacao-brasileira-de-normas-tecnicas-ipea.csl
+---
+
+<style type="text/css">
+  body{
+  font-size: 12pt; 
+  text-align: justify
+      }
+</style>
+
+
+```{r}
+#| label: setup 
+
+# pacotes utilizados
+library(here)         # Permite utilizar caminhos relativos no projeto
+library(tidyverse)    # Metapacote que inclui dplyr, readr, ggplot2, etc.
+library(psych)        # Outra forma de obter estatísticas descritivas
+library(modelsummary) # para tabelas formatadas
+
+## importa dados_hedge_clean no formato .rds para análise
+path_hedge <- here::here("data/clean/dados_hedge_clean.rds")
+dados_hedge_clean <- readr::read_rds(path_hedge)
+
+## importa dados_capm_clean no formato .rds para análise
+path_clean <- here::here("data/clean/dados_capm_clean.rds")
+dados_capm_retexc <- readr::read_rds(path_clean)
+dados_capm_clean <- dados_capm_retexc %>% drop_na()
+```
+
+
+
+# Razão Ótima de Hedge
+
+Neste exemplo de @brooks2019, um investidor deseja proteger uma posição longa 
+no índice S&P500 (ou suas ações constituintes) usando uma posição curta em 
+contratos futuros. O investidor está interessado na razão ótima de hedge, 
+ou seja, o número de unidades do ativo futuro a serem vendidas por unidade 
+dos ativos à vista mantidos.
+
+Neste tipo de aplicação, estamos geralmente mais interessados na qualidade 
+do ajuste do modelo aos dados, isto é, em sua capacidade explicativa 
+da variável resposta $y$ e nas estimativas de determinados parâmetros que 
+tem um significado específico determinado pela teoria subjacente, no caso, 
+estamos interessados na estimativa da razão ótima de hedge por 
+$\hat{\beta}_1$.
+
+Executaremos nossa análise com base nos retornos do índice S&P (500) em vez 
+dos níveis de preços. 
+
+
+## Análise Exploratória dos Dados 
+
+```{r}
+psych::describe(dados_hedge_clean)
+```
+
+Analisando as estatística descritivas, é possível verificar que as duas 
+séries de retornos são muito similares, conforme os retornos médios, 
+medianos, desvio-padrão, máximos e mínimos, o que é esperado.
+
+```{r}
+# seleciona as series de retornos
+dados_hedge_dispersao <- dados_hedge_clean %>% select(ret_spot, ret_futuro)
+
+# visualizacao das correlacoes
+PerformanceAnalytics::chart.Correlation(dados_hedge_dispersao)
+```
+
+O gráfico de dispersão entre os retornos à vista e futuros do índice 
+S&P (500) indica uma forte correlação linear positiva entre as duas séries 
+($r = 0.99$),  conforme podemos verificar pela baixa dispersão 
+(variabilidade) dos dados no gráfico. Essa forte correlação e o padrão 
+linear observado no gráfico de dispersão, indicam que um modelo de
+regressão linear pode ser adequado para modelar a relação entre 
+as séries de retornos.
+
+
+## Estimação da Razão Ótima de Hedge
+
+```{r}
+# estima o modelo de regressao linear simples
+lm_hedge <- lm(ret_spot ~ ret_futuro, data = dados_hedge_clean)
+
+# exibe o resultado
+summary(lm_hedge)
+```
+
+As estimativas pontuais do intercepto ($\hat{\beta}_0$) e da inclinação 
+($\hat{\beta}_1$) foram iguais a `r round(coef(lm_hedge)[1], 2)`, 
+`r round(coef(lm_hedge)[2], 2)`, respectivamente. 
+
+O valor-p muito pequeno do teste t da $H0: \beta_1 = 0$ indica que os 
+dados fornecem fortes evidências para rejeitar a hipótese nula de 
+que a estimativa do parâmetro seja igual a zero. Por sua vez, o 
+valor-p elevado do teste t de $H0: \beta_0 = 0$ sugere que os 
+dados fornecem fortes evidências para não rejeitar a hipótese 
+nula de que o intercepto seja igual a zero.
+
+O $R^2$ ajustado de `r round(summary(lm_hedge)$adj.r.squared, 2)` indica 
+que os retornos futuros do índice S&P (500) explicam 99% da variação dos 
+retornos à vista do índice.
+
+Uma estimativa pontual da razão ótima de hedge igual a 
+`r round(coef(lm_hedge)[2], 2)` sugere que o investidor não está cobrindo 
+100% de sua exposição no índice S&P500, mas está muito próximo disso. Se o 
+investidor tivesse uma razão de hedge de 1,00, isso significaria que ele está 
+completamente protegido contra as flutuações adversas de preço no índice. 
+Como a razão é ligeiramente menor que 1, o investidor está aceitando um pequeno 
+grau de risco residual. Na prática, isso significa que, se o investidor possui 
+uma posição longa em, por exemplo, $1.000.000 no índice S&P500, ele deveria
+assumir uma posição curta em contratos futuros equivalente a $980.000.
+
+Entretanto, como sempre, é importante obtermos uma estimativa por intervalo 
+de confiança para o parâmetro de interesse, de forma a incorporarmos a 
+incerteza associada à estimativa pontual. 
+
+```{r}
+confint(lm_hedge)
+```
+
+A estimativa por intervalo de confiança de 95% para a razão ótima de 
+hedge de [`r round(confint(lm_hedge)["ret_futuro", 1], 2)`, `r round(confint(lm_hedge)["ret_futuro", 2], 2)`], implica que o investidor deve 
+proteger entre 96% e 99% de sua posição longa no S&P500 com uma posição curta 
+em contratos futuros. O intervalo estreito sugere alta confiança na estimativa 
+da razão ótima de hedge, oferecendo flexibilidade na escolha da razão de 
+hedge dentro desse intervalo, com um risco residual mínimo.
+
+
+## Regressão com o Nível das Séries
+
+Seguindo @brooks2019, vamos estimar uma regressão para os níveis das 
+séries em vez dos retornos, ou seja, vamos realizar uma regressão 
+entre `Spot` e `Futures`: 
+
+```{r}
+# estima o modelo de regressao linear simples
+lm_precos <- lm(Spot ~ Futures, data = dados_hedge_clean)
+
+# exibe o resultado
+summary(lm_precos)
+```
+
+As estimativas pontuais do intercepto ($\hat{\beta}_0$) e da inclinação 
+($\hat{\beta}_1$) foram iguais a `r round(coef(lm_precos)[1], 2)`, 
+`r round(coef(lm_precos)[2], 2)`, respectivamente. 
+
+
+## Interpretação dos Resultados
+
+Vamos agora passar para a interpretação (econômica) das estimativas dos 
+parâmetros de ambas as regressões. 
+
+Como sabemos, o parâmetro da inclinação da regressão estimada dos 
+retornos mede a razão de hedge ótima, assim como a relação de curto 
+prazo entre as duas séries, ou seja, como os retornos do preço futuro 
+e do preço spot se movem juntos no curto prazo. 
+
+Em contraste, o parâmetro de inclinação em uma regressão usando os índices 
+spot e futuros brutos (ou o logaritmo da série spot e o logaritmo da série 
+de futuros) pode ser interpretado como uma medida da relação de longo prazo 
+entre eles. Esse resultado é esperado, pois em um mercado eficiente, 
+à medida que o contrato futuro se aproxima da data de vencimento, o 
+preço futuro deve convergir para o preço spot
+
+O intercepto da regressão do nível de preços pode ser considerado uma 
+aproximação do custo de carregamento. O custo de carregamento inclui todos 
+os custos associados à manutenção de uma posição em um ativo ao longo 
+do tempo, como custos de armazenamento, seguro, e custos financeiros. 
+
+Analisando os resultados efetivos, verificamos que a relação de longo prazo 
+entre os preços spot e futuros é quase de 1:1, como esperado. Essa proporção 
+de 1:1 indica que, no longo prazo, as variações nos preços spot e futuros são 
+praticamente equivalentes, o que é consistente com as teoria econômica da 
+eficiência dos mercados, incluindo o mercado futuro.
+
+
+## Hedging Revisitado
+
+Como vimos anteriormente, podemos testar outras hipóteses sobre 
+as estimativas dos parâmetros de um modelo de regressão linear. Suponha 
+que desejamos testar a hipótese nula de que $H_0 : \beta = 1$. 
+
+Podemos, claro, calcular as estatísticas de teste para essa hipótese 
+manualmente; no entanto, é mais fácil deixar uma função fazer esse trabalho. 
+O pacote `car` contém a função `linearHypothesis()`, que pode realizar 
+essa tarefa.
+
+Como argumentos, `linearHypothesis` pede um modelo, enquanto o segundo 
+argumento é um vetor de restrições que pode ser escrito diretamente 
+usando os nomes das variáveis. Como queremos especificar $\beta = 1$, 
+fazemos: 
+
+```{r}
+car::linearHypothesis(lm_hedge, "ret_futuro = 1")
+```
+
+As primeiras linhas listam os modelos que estão sendo comparados: o modelo 
+restrito 1, onde $\beta = 1$, e o modelo original `rspot ~ rfutures`. Abaixo, 
+encontramos a estatística do teste F, sendo 14,03 seu o valor. O valor-p 
+correspondente é 0,0002246, conforme indicado na última coluna. 
+Como este valor é consideravelmente menor que 0,01, podemos rejeitar a 
+hipótese nula ($H_0 : \beta = 1$) ao nível de significância de 1%.
+
+Observe que obtemos o mesmo resultado ao obter e analisar as estimativas 
+por intervalo de confiança para $\beta_1$, pois o intervalo de confiança 
+estimado para $\beta_1$ não inclui 1. Entretanto, a estimativa por intervalo 
+de confiança é mais informativa, pois fornece uma faixa de valores possíveis 
+para o parâmetro de interesse, em vez de apenas uma decisão.
+
+Também podemos realizar testes de hipóteses nas regressões com os 
+níveis: 
+
+```{r}
+car::linearHypothesis(lm_precos, "Futures = 1")
+```
+
+Com uma estatística F igual 2,58 e um valor-p correspondente de 0,1092, 
+podemos concluir que a hipótese nula não é rejeitada no nível 
+de significância de 5%, ou seja, os dados fornecem evidências 
+para não rejeitar a hipótese nula de que $\beta_1$ na regressão 
+com os níveis do índice seja igual a 1, conforme previsto pela 
+hipótese de convergência dos preços spot e futuros no longo prazo.
+
+
+
+# Estimação do CAPM
+
+## Análise Exploratória dos Dados 
+
+```{r}
+psych::describe(dados_capm_clean)
+```
+
+Analisando as estatística descritivas, é possível verificar que as 
+séries de retornos excedentes do índice S&P (500) e da 
+Ford apresentam características substancialmente diferentes, conforme os 
+estatística reportadas.
+
+```{r}
+# seleciona as series de retornos
+dados_capm_dispersao <- dados_capm_clean %>% select(retexc_ford, retexc_sp500) 
+
+# visualizacao das correlacoes
+PerformanceAnalytics::chart.Correlation(dados_capm_dispersao)
+```
+
+O coeficiente de correlação de Pearson supõe que as series seguem 
+aproximadamente uma distribuição normal. Entretanto, como as séries 
+apresentam assimetria e curtose consideráveis, o coeficiente de 
+correlação de Spearman pode ser mais apropriado. 
+
+```{r}
+# correlação de spearman entre as séries 
+r_spearman <- cor(dados_capm_dispersao$retexc_ford, dados_capm_dispersao$retexc_sp500, method = "spearman")
+
+r_spearman
+```
+
+A estimativa pontual do coeficiente de correlação de Spearman entre as 
+séries de retornos excedentes da Ford e do índice S&P (500) foi igual a 
+`r round(r_spearman, 2)`
+indicando ainda uma correlação linear positiva considerável, mas não 
+tão elevada, entre as duas séries.
+
+O gráfico de dispersão entre os retornos excedentes da Ford e do S&P (500) 
+indica alguma correlação linear positiva , entre as duas séries ($r = 0.58$), 
+entretanto, o gráfico indica a presença de outliers, que podem distorcer as 
+estimativas dos coeficientes de correlação.
+
+Portanto, a análise exploratória dos dados fornece evidências de que 
+o modelo de regressão linear simples que será utilizado para estimar o CAPM 
+pode não ser o mais adequado para modelar a relação entre os retornos 
+excedentes da Ford e do índice S&P (500) e, portanto, para estimar o 
+beta da Ford.
+
+
+## Estimação do CAPM
+
+Para o caso da Ford, o modelo de regressão linear simples pode ser 
+representado por: 
+
+$$
+(R_{ford} - r_f)_t = \alpha + \beta (R_M - r_f)_t + u_t
+$$
+sendo:
+
+- $R_{ford}$ o retorno da Ford.
+- $R_f$ a taxa livre de risco.
+- $\alpha_i$ o alpha de Jensen.
+- $\beta_i$ a sensibilidade do retorno da Ford em relação ao mercado (beta).
+- $R_m$ o retorno da carteira de mercado.
+- $u_i$ o termo de erro.
+
+Portanto, utilizando os dados disponíveis, podemos estimar o beta da Ford 
+com:
+
+```{r}
+# estima o modelo de regressao linear simples
+capm_ford <- lm(retexc_ford ~ retexc_sp500, data = dados_capm_clean)
+
+# exibe o resultado
+summary(capm_ford)
+```
+
+As estimativas pontuais do $\alpha$ de Jensen e do 
+beta do CAPM foram iguais a `r round(coef(capm_ford)[1], 2)`, 
+`r round(coef(capm_ford)[2], 2)`, respectivamente. O $R^2$ ajustado 
+de `r round(summary(capm_ford)$adj.r.squared, 2)` indica 
+que os retornos excedentes do índice S&P (500) explicam 33% da variação dos 
+retornos das ações da Ford, evidenciando que o modelo de regressão linear 
+simples não é capaz de explicar uma parte substancial da variação 
+dos retornos excedentes da Ford.
+
+
+## Interpretação do $\alpha$ de Jensen
+
+- $\alpha > 0$: Indica que as ações da Ford estão gerando retornos acima do 
+que seria esperado com base no seu risco sistemático em relação ao mercado. 
+Isso significa que, após ajustar pelos riscos, as ações estão oferecendo um 
+desempenho superior ao previsto pelo CAPM, sugerindo que a Ford está criando 
+valor adicional para os investidores além do que seria justificado pelo nível 
+de risco assumido.
+
+- $\alpha = 0$: Indica que as ações da Ford estão entregando retornos que 
+correspondem exatamente ao nível de risco sistemático previsto pelo CAPM. 
+Neste caso, o desempenho da Ford está em linha com as expectativas do mercado, 
+e não há retorno adicional (nem inferior) além do que seria justificado pelo 
+risco assumido.
+
+- $\alpha < 0$: Indica que as ações da Ford estão gerando retornos 
+abaixo do que seria esperado com base no seu risco sistemático. Isso sugere 
+que, após ajustar pelos riscos, as ações estão subperformando em relação ao 
+que o CAPM prevê, o que pode indicar que a Ford não está gerando valor 
+suficiente para compensar o risco que os investidores estão assumindo.
+
+Portanto, o alpha ($\alpha$) de Jensen mede o retorno anômalo, 
+ou seja, o quanto a Ford está gerando além ou aquém do esperado 
+ajustado ao risco
+
+Para interpretar o $\alpha$ de Jensen estimado para a Ford, 
+podemos observar a estimativa por intervalo de confiança para o parâmetro 
+de interesse, de forma a incorporarmos a incerteza associada à estimativa
+pontual. 
+
+```{r}
+confint(capm_ford)
+```
+
+Como zero está dentro do intervalo de confiança estimado para o $\alpha$ de 
+Jensen, não podemos rejeitar a hipótese nula de que o $\alpha$ de Jensen 
+é igual a zero ao nível de significância de 5%. Portanto, os dados 
+fornecem evidência de que as ações da Ford não parecem superar ou 
+ficar significativamente abaixo do desempenho do mercado como um todo.
+
+
+## Interpretação do Beta do CAPM
+
+O beta ($\beta$) do CAPM mede a sensibilidade do retorno das ações da Ford 
+em relação aos retornos do mercado como um todo. Especificamente, ele 
+quantifica o risco sistemático, ou seja, o risco que não pode ser 
+diversificado, e reflete como o retorno da Ford tende a se mover em 
+resposta às variações no retorno do mercado.
+
+- $\beta = 1$: Indica que as ações da Ford têm um comportamento em linha 
+com o mercado. Se o mercado subir ou descer, espera-se que as ações da Ford 
+subam ou desçam na mesma proporção. Isso significa que a Ford apresenta o 
+mesmo nível de risco sistemático que o mercado como um todo.
+
+- $\beta > 1$: Indica que as ações da Ford são mais voláteis do que o mercado. 
+Se o mercado subir 1%, espera-se que as ações da Ford subam mais de 1%, e se 
+o mercado cair 1%, espera-se que as ações da Ford caiam mais de 1%. Isso 
+sugere que a Ford está assumindo um risco sistemático maior do que o 
+mercado, o que pode resultar em retornos potencialmente mais altos em 
+mercados em alta, mas também em perdas maiores em mercados em baixa.
+
+- $\beta < 1$: Indica que as ações da Ford são menos voláteis do que o 
+mercado. Se o mercado subir 1%, espera-se que as ações da Ford subam menos 
+de 1%, e se o mercado cair 1%, espera-se que as ações da Ford caiam menos de 
+1%. Isso sugere que a Ford está assumindo um risco sistemático menor do que 
+o mercado, resultando em uma menor sensibilidade às variações do mercado.
+
+- $\beta < 0$: Embora raro, um beta negativo indicaria que as ações da Ford 
+tendem a se mover na direção oposta ao mercado. Se o mercado sobe, espera-se 
+que as ações da Ford caiam, e vice-versa. Isso indicaria que a Ford tem um 
+comportamento contrário ao mercado, atuando possivelmente como uma proteção 
+em um portfólio diversificado.
+
+Conforme o resultado anterior, a estimativa por intervalo de confiança 
+de 95% para o beta do CAPM foi 
+[`r round(confint(capm_ford)["retexc_sp500", 1], 2)`, `r round(confint(capm_ford)["retexc_sp500", 2], 2)`]. Assim, temos 95% de 
+confiança de que o beta da Ford é maior que 1, indicando que as ações da 
+Ford são mais voláteis do que o mercado, assumindo um risco sistemático 
+maior do que o mercado como um todo. Isso sugere que a Ford pode 
+apresentar retornos potencialmente mais altos em mercados em alta, mas 
+também perdas maiores em mercados em baixa, em comparação com o mercado 
+como um todo.
+
+
+## Testes de Hipóteses
+
+
+Assuma que queremos testar a hipótese nula de que o valor do parâmetro
+populacional $\beta$ seja igual a 1. Como podemos realizar esse teste? 
+Novamente, podemos realizar um teste F usando a função 
+`linearHypothesis()` do pacote **car**:
+
+```{r}
+teste <- car::linearHypothesis(capm_ford, "retexc_sp500 = 1")
+```
+
+O teste F para a hipótese nula de que $\beta = 1$ resultou em uma 
+estatística F de `r round(teste[["F"]][2], 2)` e um valor-p muito pequeno 
+, muito abaixo dos níveis de significância usuais  Portanto, os dados 
+fornecem evidências para rejeitar a hipótese nula de que o beta da Ford 
+é igual a 1, sugerindo que as ações da Ford são mais voláteis do que o mercado, 
+assumindo um risco sistemático maior do que o mercado como um todo. 
+
+Novamente, repare que obtemos o mesmo resultado ao obter e analisar as 
+estimativas por intervalo de confiança para $\beta$, pois o intervalo de 
+confiança estimado para $\beta$ envolver limites superiores a 1. 
+Entretanto, a estimativa por intervalo de confiança é mais informativa, 
+pois fornece um intervalo de valores possíveis para o parâmetro de interesse, 
+em vez de apenas uma decisão.
+
+
+
+## Testes de Múltiplas Hipóteses
+
+Suponha que desejamos realizar um teste conjunto em que tanto o alpha de 
+Jensen quanto o beta do CAPM sejam, simultaneamente, iguais a um. 
+Podemos realizar esse teste usando a função `linearHypothesis()` do pacote 
+**car**:
+
+```{r}
+teste_conjunto <- 
+  car::linearHypothesis(capm_ford, c("(Intercept) = 1", "retexc_sp500 = 1"))
+```
+
+Na saída, R produz o resultado familiar para o teste F. No entanto, 
+observamos que o teste da hipótese conjunta é indicado pelas duas condições 
+que são declaradas: `(Intercept) = 1` e `ersandp = 1`. Ao analisar 
+o valor da estatística F de `r round(teste_conjunto[["F"]][2], 2)` com um 
+valor-p correspondente muito abaixo dos níveis de significância usuais, 
+concluímos que os dados fornecem fortes evidências para 
+rejeitar a hipótese nula, $H_0 : \beta_1 = 1, \beta_2 = 1$, 
+ao nível de significância de 1%.
+
+
+# Reportando os Resultados de Modelos de Regressão
+
+## Pacote modelsummary
+
+O pacote `modelsummary` fornece uma maneira fácil de criar tabelas 
+formatadas de modelos de regressão. A função `modelsummary()` aceita 
+um ou mais modelos de regressão e retorna uma tabela formatada com 
+os resultados da estimação dos modelos. 
+
+```{r}
+modelsummary::modelsummary(capm_ford)
+```
+
+A tabela acima resume os resultados da estimação do modelo de regressão 
+linear simples para as ações da Ford, incluindo as estimativas pontuais 
+dos coeficientes, os erros padrão, os valores t, os valores-p e os 
+intervalos de confiança de 95% para os coeficientes. A tabela também 
+inclui o $R^2$ ajustado do modelo, fornecendo uma medida da qualidade 
+do ajuste do modelo aos dados.
+
+Podemos personalizar a tabela de resumo do modelo para incluir 
+apenas as estatísticas de interesse e uma nota de 
+rodapé:
+
+```{r}
+
+# lista com possiveis modelos
+modelo <- list(
+  "CAPM Ford" = lm(retexc_ford ~ retexc_sp500, data = dados_capm_clean)
+)
+
+# Criar a tabela de regressão usando modelsummary
+modelsummary(modelo, 
+             output = "html",
+             fmt = fmt_decimal(2),
+             statistic = c("conf.int",
+                           "e.p. = {std.error}", 
+                           "t = {statistic}",
+                           "p = {p.value}"),
+             stars = FALSE, 
+             gof_omit = "DF|Deviance|AIC|BIC|Log.Lik.|RMSE",
+              notes = "Fonte: Elaborada pelos autores."
+)
+```
+
+Alterando o nome do modelo e adicionando uma nota de rodapé à tabela,
+
+```{r}
+# Criar a tabela de regressão usando modelsummary
+modelsummary(modelo, 
+             output = "html",
+             fmt = fmt_decimal(2),
+             statistic = c("conf.int",
+                           "e.p. = {std.error}", 
+                           "t = {statistic}",
+                           "p = {p.value}"),
+             stars = FALSE, 
+             gof_omit = "DF|Deviance|AIC|BIC|Log.Lik.|RMSE",
+             notes = "Fonte: Elaborada pelos autores."
+)
+```
+
+Alterando o nome dos parâmetros e adicionando uma nota de rodapé à tabela,
+
+```{r}
+
+# Criar a tabela de regressão usando modelsummary
+modelsummary(modelo, 
+             escape = FALSE,
+             output = "huxtable",
+             fmt = 2,
+             statistic = c("conf.int",
+                           "e.p. = {std.error}", 
+                           "t = {statistic}",
+                           "p = {p.value}"),
+             stars = FALSE, 
+             gof_omit = "DF|Deviance|AIC|BIC|Log.Lik.|RMSE",
+             notes = "Fonte: Elaborada pelos autores.",
+             coef_map = c('(Intercept)' = 'Alpha', 
+                          'retexc_sp500' = 'Beta')
+)
+```
+ 
+
+
+
+# Referências {.unnumbered}
+
+::: {#refs}
+:::
