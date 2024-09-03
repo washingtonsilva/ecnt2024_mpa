@@ -2,7 +2,8 @@
 
 Este repositório contém os materiais e códigos relacionados à disciplina 
 **Econometria Aplicada à Finanças** ofertada no âmbito do 
-[Mestrado ProfissionalemAdministração](https://www.formiga.ifmg.edu.br/mestrado) ofertado pelo IFMG - Campus Formiga. 
+[Mestrado ProfissionalemAdministração](https://www.formiga.ifmg.edu.br/mestrado) 
+ofertado pelo IFMG - Campus Formiga. 
 
 O objetivo deste projeto é compartilhar exemplos práticos, relatórios e 
 scripts utilizados durante o curso, oferecendo uma base sólida para o 

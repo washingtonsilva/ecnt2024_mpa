@@ -1,0 +1,381 @@
+---
+title: "Modelo de Regressão Linear Múltipla"
+subtitle: "Heterocedasticidade"
+author: Seu Nome
+lang: pt
+format:
+  html:
+    theme: cosmos
+    toc: true
+    number-sections: true
+    self-contained: true
+crossref:
+  fig-prefix: 'Fig.'
+  tbl-prefix: 'Tab.'
+execute:
+  echo: true
+  message: false
+  warning: false
+  enabled: true
+editor: source
+bibliography: referencias.bibtex
+csl: associacao-brasileira-de-normas-tecnicas-ipea.csl
+---
+
+
+<style type="text/css">
+  body{
+  font-size: 12pt; 
+  text-align: justify
+      }
+</style>
+
+
+```{r}
+#| label: setup 
+
+# pacotes utilizados
+library(tidyverse)  # Metapacote que inclui dplyr, readr, ggplot2, etc.
+library(broom)      # converte os resultados de modelos estatísticos em tibbles
+library(Ecdat)      # contém conjuntos de dados para econometria
+```
+
+
+# Exemplos 
+
+**Objetivo:** Estimar a relação entre as pontuações padronizadas 
+em testes (variável resposta) e (1) a 
+proporção aluno-professor e (2) a renda, _ou seja_,
+
+$$ 
+(\text{Test score})_i = \beta_0 + \beta_1 \text{Ratio}_i + 
+                         \beta_2 \text{Income}\_{i} + u\_i \tag{1} 
+$$
+
+**Problema potencial:** Heterocedasticidade... e não observamos $u_i$.
+
+**Solução:**
+
+1. Estimar a relação em $(1)$ usando Mínimos Quadrados Ordinários (MQO).
+
+2. Usar os resíduos $(e_i)$ para testar a heterocedasticidade:
+
+    - Teste de Goldfeld-Quandt
+    - Teste de Breusch-Pagan
+    - Teste de White
+
+Usaremos os dados `Caschool` contidos no pacote `Ecdat`.
+
+```{r}
+# seleciona e renomeia as variáveis desejadas
+# atribui o resultado para teste_df
+teste_df <- select(Caschool, test_score = testscr, ratio = str, income = avginc)
+
+# formata teste_df como tibble
+teste_df <- as_tibble(teste_df)
+
+# visualiza as 2 primeiras linhas do conjunto de dados
+head(teste_df, 2)
+
+# estrutura geral 
+dplyr::glimpse(teste_df)
+```
+
+Vamos começar estimando o modelo:
+
+$$ 
+(\text{Test score})_i = \beta_0 + \beta_1 \text{Ratio}_i + 
+                         \beta_2 \text{Income}\_{i} + u\_i \tag{1} 
+$$
+
+```{r}
+# estima o modelo
+model_est <- lm(test_score ~ ratio + income, data = teste_df)
+# resultados
+tidy(model_est)
+```
+
+
+Agora, vamos ver o que os resíduos sugerem sobre heterocedasticidade.
+
+```{r}
+#| layout-ncol: 2
+
+# adiciona os resíduos à data frame
+teste_df$e <- residuals(model_est)
+
+# Criando o primeiro gráfico: resíduos vs renda
+ggplot(data = teste_df, aes(x = income, y = e)) +
+  geom_point(size = 2.5, alpha = 0.5, color = "#FF6F61") +
+  labs(x = "Renda", y = expression(italic(e))) +
+  theme_minimal(base_family = "serif")  
+
+# Criando o segundo gráfico: resíduos vs razão aluno-professor
+ggplot(data = teste_df, aes(x = ratio, y = e)) +
+  geom_point(size = 2.5, alpha = 0.5, color = "darkslategrey") +
+  labs(x = "Razão aluno-professor", y = expression(italic(e))) +
+  theme_minimal(base_family = "serif")
+```
+
+
+A renda parece potencialmente heterocedástica, vamos testar usando o 
+teste de Goldfeld-Quandt.
+
+
+
+## Teste de Goldfeld-Quandt
+
+Implementando o algoritmo:
+
+```{r}
+# ordena a df pela renda em ordem crescente
+test_df <- dplyr::arrange(teste_df, income)
+
+# reestima o modelo para as últimas e primeiras 158 observações
+modelo_est1 <- lm(test_score ~ ratio + income, data = tail(teste_df, 158))
+modelo_est2 <- lm(test_score ~ ratio + income, data = head(teste_df, 158))
+
+# armazena os resíduos de cada regressão
+e_modelo1 <- residuals(modelo_est1)
+e_modelo2 <- residuals(modelo_est2)
+
+# Calcula a RSS para cada regressão
+(rss_model1 <- sum(e_modelo1^2))
+(rss_model2 <- sum(e_modelo2^2))
+```
+
+
+Cálculo da estatística de teste de Goldfeld-Quandt:
+
+$F_{n^\star-k,\,n^\star-k} = \dfrac{\text{RSS}_2}{\text{RSS}_1}$
+$\approx\dfrac{`r round(rss_model2, 2) %>% format(big.mark = ",")`}{`r round(rss_model1, 2) %>% format(big.mark = ",")`}$
+$\approx`r round(rss_model2/rss_model1, 2)`$
+
+Teste via $F_{158-3,\,158-3}$
+
+```{r}
+# estatatística do teste de G-Q 
+(f_gq <- rss_model2/rss_model1)
+```
+
+```{r}
+# valor-p
+pf(q = f_gq, df1 = 158-3, df2 = 158-3, lower.tail = F)
+```
+
+Reunindo tudo:
+
+$H_0$: $\sigma_1^2 = \sigma_2^2$ *vs.* $H_A$: $\sigma_1^2 \neq \sigma_2^2$
+
+Estatística de teste de Goldfeld-Quandt: $F \approx `r round(f_gq, 2)`$
+
+valor-p = $\approx `r round(pf(q = f_gq, df1 = 158-3, df2 = 158-3, lower.tail = F), 5)`$
+
+Portanto, os dados fornecem evidência para rejeitar a hipótese nula, o 
+valor-p é menor que 0,05.
+
+**Conclusão:** Há evidências estatisticamente significativas de que 
+$\sigma_1^2 \neq \sigma_2^2$. Portanto, encontramos evidências 
+estatisticamente significativas de heterocedasticidade, ao nível de 5%.
+
+
+E se tivéssemos escolhido focar na razão aluno-professor?
+
+```{r}
+# ordena os dados pela razão aluno-professor
+teste_df2 <- dplyr::arrange(teste_df, ratio)
+
+# Reestimar o modelo para as últimas e primeiras 158 observações
+modelo_est3 <- lm(test_score ~ ratio + income, data = tail(teste_df2, 158))
+modelo_est4 <- lm(test_score ~ ratio + income, data = head(teste_df2, 158))
+
+# Capturar os resíduos de cada regressão
+e_modelo3 <- residuals(modelo_est3)
+e_modelo4 <- residuals(modelo_est4)
+
+# Calcular a SSE para cada regressão
+(rss_model3 <- sum(e_modelo3^2))
+(rss_model4 <- sum(e_modelo4^2))
+```
+
+$F_{n^\star-k,\,n^\star-k} = \dfrac{\text{RSS}_4}{\text{RSS}_3} \approx\dfrac{`r round(rss_model4, 2) %>% format(big.mark = ",")`}{`r round(rss_model3, 2) %>% format(big.mark = ",")`} \approx`r round(rss_model4 / rss_model3, 2)`$
+
+que tem um valor-p de aproximadamente `r round(pf(rss_model4 / rss_model3, 158-3, 158-3, lower.tail = F), 4)`.
+ 
+Portanto, Teríamos falhado em rejeitar a hipótese nula (o valor-p é 
+maior que 0,05), concluindo que não encontramos evidências 
+estatisticamente significativas de heterocedasticidade.
+
+
+**Lição:** Importância de compreender as limitações dos estimadores, 
+testes, *etc.*
+
+
+
+## Teste de Breusch-Pagan
+
+
+Vamos testar o mesmo modelo com o teste de Breusch-Pagan.
+
+*Lembre-se:* Salvamos os resíduos como `e` em nossa data frame, 
+ou seja,
+
+```{r}
+# adiciona os resíduos à data frame
+teste_df$e <- residuals(model_est)
+```
+
+No teste de Breusch-Pagan, primeiro fazemos a regressão dos 
+resíduos ao quadrado ($e_i^2$) contra as variáveis explicativas e 
+usamos o $R^2$ resultante para calcular a estatística de teste:
+
+```{r}
+# regressão dos resíduos ao quadrado contra as variáveis explicativas
+modelo_bp <- lm(I(e^2) ~ ratio + income, data = test_df)
+
+# armazena o R2
+r2_bp <- summary(modelo_bp)$r.squared
+r2_bp
+```
+
+A estatística de teste de Breusch-Pagan é dada por: 
+
+$\text{LM} = n \times R^2_e$
+$\approx 420 \times `r r2_bp %>% round(7) %>% format(nsmall = 7, scientific = F)`$
+$\approx `r round(nrow(teste_df) * r2_bp, 4)`$
+
+que testamos contra uma distribuição $\chi_k^2$ (aqui: $k=2$, 
+$k$ é o número de variáveis explicativas, excluindo o intercepto).
+
+```{r}
+# estatistica do teste de B-P 
+estat_bp <- 420 * r2_bp
+estat_bp
+
+# calcula o valor-p
+pchisq(q = estat_bp, df = 2, lower.tail = F)
+```
+
+
+Reunindo tudo:
+
+$H_0$: $\alpha_1 = \alpha_2 = 0$ *vs.* $H_A$: $\alpha_1 \neq 0$ e/ou 
+$\alpha_2 \neq 0$
+
+para o modelo 
+
+$$
+u_i^2 = \alpha_0 + \alpha_1 \text{Ratio}_i + \alpha_2 \text{Income}_i + w_i
+$$
+
+Estatística de teste de Breusch-Pagan: $\widehat{\text{LM}} \approx `r round(estat_bp, 3)`$
+
+valor-p $\approx `r pchisq(q = estat_bp, df = 2, lower.tail = F) %>% round(3)`$
+
+Portanto, não rejeitamos a hipótese nula, o valor-p é maior que 0,05.
+
+**Conclusão:** Não encontramos evidências estatisticamente significativas de heterocedasticidade ao nível de 5%, ou seja, não encontramos evidências de 
+uma relação *linear* entre $u_i^2$ e as variáveis explicativas.
+
+
+
+## Teste de White
+
+O teste de White adiciona termos ao quadrado e interações ao teste de 
+Breusch-Pagan:
+
+$$
+\begin{align}
+\color{#314f4f}{u_{i}^2} =& \color{#314f4f}{\alpha_{0} + \alpha_{1} \text{Ratio}_{i} + \alpha_{2} \text{Income}_{i} } \\
+&+ \color{#e64173}{\alpha_{3} \text{Ratio}_{i}^2 + \alpha_{4} \text{Income}_{i}^2 + \alpha_{5} (\text{Ratio}_{i}\times\text{Income}_{i}}) \\
+&+ \color{#314f4f}{w_{i}}
+\end{align}
+$$
+
+o que altera a hipótese nula de 
+
+$H_0: \alpha_1 = \alpha_2 = 0$ para
+
+$H_0: \alpha_1 = \alpha_2 = \alpha_3 = \alpha_4 = \alpha_5 = 0$
+
+Assim, precisamos apenas atualizar nosso código R, e estaremos prontos.
+
+Aqui está a tradução:
+
+*Observação:* R tem uma notação peculiar para termos ao quadrado e 
+interações em `lm()`:
+
+- **Termos ao quadrado** usam `I()`, _por exemplo_, `lm(y ~ I(x^2))`
+
+- **Interações** usam `:` entre as variáveis, _por exemplo_, `lm(y ~ x1:x2)`
+
+*Exemplo:* Regressão de `y` contra o quadrado de `x1` e `x2` e contra a 
+interação de `x1` e `x2`:
+
+```r
+# Regressão quadrática com interações
+lm(y ~ x1 + x2 + I(x1^2) + I(x2^2) + x1:x2, data = pretend_df)
+```
+
+Implementando o algoritmo: 
+
+**Passo 1:** Regressão de $e_i^2$ contra as variáveis explicativas, 
+seus quadrados e interações:
+
+```{r}
+# regressão dos residuos quadráticos contra as variaveis explicativas, 
+# seus quadrados e interações
+modelo_white <- lm(
+  I(e^2) ~ ratio + income + I(ratio^2) + I(income^2) + ratio:income,
+  data = teste_df
+)
+```
+
+
+**Passo 2:** Armazene o $Rˆ2$ desta regressão
+
+```{r}
+# armazena o R2
+r2_white <- summary(modelo_white)$r.squared
+r2_white
+```
+
+
+**Passo 3:** Calcule a estatística do teste de White $\text{LM} = n \times R_e^2 \approx 420 \times `r round(r2_white, 3)`$
+
+```{r}
+# calcula a estatistica do teste de White
+estat_white <- 420 * r2_white
+estat_white
+```
+
+
+**Passo 4:** Calcule o valor-p the associado (onde $\text{LM} \overset{d}{\sim} \chi_k^2$); aqui, $k=5$
+
+```{r}
+# calcula o valor-p
+pchisq(q = estat_white, df = 5, lower.tail = F)
+```
+
+Reunindo tudo...
+
+$H_0: \alpha_1 = \alpha_2 = \alpha_3 = \alpha_4 = \alpha_5 = 0$
+*vs.* $H_A: \alpha_i \neq 0$ para algum $i \in \{1,\, 2,\,\ldots,\, 5\}$
+
+$$
+\begin{align}
+u_i^2 =& \alpha_0 + \alpha_1 \text{Ratio}_i + \alpha_2 \text{Income}_i \\
+&+ \alpha_3 \text{Ratio}_i^2 + \alpha_4 \text{Income}_i^2 \\
+&+ \alpha_5 \text{Ratio}_i \times \text{Income}_i + w_i
+\end{align}
+$$
+
+A estatística do teste de White é: $\text{LM} = n \times R_e^2 \approx 420 \times `r round(r2_white, 3)` \approx `r round(estat_white, 2)`$
+
+Sob a distribuição $\chi_5^2$, $\widehat{\text{LM}}$ tem 
+um valor-p menor que 0,001.
+
+Portanto, rejeitamos a hipótese nula, e concluímos que há evidências 
+estatisticamente significativas de heterocedasticidade, ao nível de 5%.
+
+
