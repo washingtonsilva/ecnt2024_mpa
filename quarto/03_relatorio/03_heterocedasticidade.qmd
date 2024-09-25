@@ -69,7 +69,10 @@ Usaremos os dados `Caschool` contidos no pacote `Ecdat`.
 ```{r}
 # seleciona e renomeia as variáveis desejadas
 # atribui o resultado para teste_df
-teste_df <- select(Caschool, test_score = testscr, ratio = str, income = avginc)
+teste_df <- dplyr::select(Caschool, 
+                          test_score = testscr, 
+                          ratio = str, 
+                          income = avginc)
 
 # formata teste_df como tibble
 teste_df <- as_tibble(teste_df)
@@ -92,7 +95,7 @@ $$
 # estima o modelo
 model_est <- lm(test_score ~ ratio + income, data = teste_df)
 # resultados
-tidy(model_est)
+broom::tidy(model_est)
 ```
 
 

@@ -1,0 +1,408 @@
+---
+title: "Modelo de Regressão Linear Múltipla"
+subtitle: "Heterocedasticidade - Parte 2"
+author: Prof. Washington S. da Silva
+lang: pt
+format:
+  html:
+    theme: cosmos
+    toc: true
+    number-sections: true
+    self-contained: true
+crossref:
+  fig-prefix: 'Fig.'
+  tbl-prefix: 'Tab.'
+execute:
+  echo: true
+  message: false
+  warning: false
+  enabled: true
+editor: source
+bibliography: referencias.bibtex
+csl: associacao-brasileira-de-normas-tecnicas-ipea.csl
+---
+
+
+<style type="text/css">
+  body{
+  font-size: 13pt; 
+  text-align: justify
+      }
+</style>
+
+
+```{r}
+#| label: setup 
+
+# pacotes utilizados
+library(tidyverse)  # Metapacote que inclui dplyr, readr, ggplot2, etc.
+library(broom)      # converte os resultados de modelos estatísticos em tibbles
+library(Ecdat)      # contém conjuntos de dados para econometria
+```
+
+
+# Exemplos
+
+Voltando ao nosso conjunto de dados de pontuações em testes…
+
+```{r}
+#| label: test-data
+
+# seleciona e renomeie as variáveis desejadas; 
+# atribui o resultado ao um novo conjunto de dados; 
+# salva o objeto como tibble
+test_df <- Caschool %>% select(
+  test_score = testscr, ratio = str, income = avginc, enrollment = enrltot
+) %>% as_tibble()
+
+# visualizando as primeiras 2 linhas
+head(test_df, 2)
+```
+
+Encontramos evidências significativas de heterocedasticidade. 
+Vamos verificar se foi devido à especificação incorreta do 
+nosso modelo:
+
+Modelo 1: 
+
+$\text{Score}_i = \beta_0 + \beta_1 \text{Ratio}_i + \beta_2 \text{Income}_i + u_i$
+
+Sintáxe R:
+
+`lm(test_score ~ ratio + income, data = test_df)`
+
+
+```{r}
+# Estima o modelo 1 salva os resíduos
+test_df <- test_df %>% 
+  mutate(e1 = lm(test_score ~ ratio + income, data = test_df) %>% residuals())
+
+# grafico dos residuos do modelo 1 contra income
+ggplot(data = test_df, aes(x = income, y = e1)) +
+  geom_point(size = 3,
+             alpha = 0.5,
+             color = "red") +
+  labs(x = "Income", y = "e1") +
+  theme_minimal()
+```
+
+
+Modelo 2: 
+
+$$
+\log\left(\text{Score}_i\right) = \beta_0 + \beta_1 \text{Ratio}_i + \beta_2 \text{Income}_i + u_i
+$$
+
+Sintáxe R:
+
+`lm(log(test_score) ~ ratio + income, data = test_df)`
+
+
+```{r}
+# Estima o modelo 2 e salva os resíduos
+test_df <- test_df %>% 
+  mutate(e2 = lm(log(test_score) ~ ratio + income, data = test_df) %>% residuals())
+
+# grafico dos residuos do modelo 2 contra income
+ggplot(data = test_df, aes(x = income)) +
+  geom_point(aes(y = e2),
+             size = 3,
+             alpha = 0.5,
+             color = "red") +
+  labs(x = "Income", y = "e2") +
+  theme_minimal()
+```
+
+
+Modelo 3: 
+
+$$
+\log\left(\text{Score}_i\right) = \beta_0 + \beta_1 \text{Ratio}_i + \beta_2 \log\left(\text{Income}_i\right) + u_i
+$$
+
+Sintáxe R:
+
+`lm(log(test_score) ~ ratio + log(income), data = test_df)`
+
+
+```{r}
+# Estima o modelo 3 e salva os resíduos
+test_df <- test_df %>% 
+mutate(e3 = lm(log(test_score) ~ ratio + log(income), data = test_df) %>% residuals())
+
+# Plot
+ggplot(data = test_df, aes(x = income)) +
+  geom_point(aes(y = e3),
+             size = 3,
+             alpha = 0.5,
+             color = "red") +
+  labs(x = "Income", y = "e3") +
+  theme_minimal()
+```
+
+
+Vamos testar essa nova especificação (Modelo 3) com o teste de White para heterocedasticidade.
+
+
+```{r}
+reg_white <- lm(e3^2 ~
+  ratio * log(income) + I(ratio^2) + I(log(income)^2),
+  data = test_df
+) 
+
+white_r2_spec <- summary(reg_white)$r.squared
+
+white_stat_spec <- white_r2_spec * 420
+white_stat_spec 
+```
+
+Neste caso, a regressão para o teste de White é :
+
+$$
+\begin{align}
+  e_i^2 = &\alpha_0 + \alpha_1 \text{Ratio}_i + \alpha_2 \log\left(\text{Income}_i\right) + \alpha_3 \text{Ratio}_i^2 + \alpha_4 \left(\log\left(\text{Income}_i\right)\right)^2 \\
+  &+ \alpha_5 \left(\text{Ratio}_i\times\log\left(\text{Income}_i\right)\right) + v_i
+\end{align}
+$$
+
+
+que produz $R_e^2\approx`r round(white_r2_spec, 3)`$, sendo o valor da estatística 
+de teste:
+$\widehat{\text{LM}} = n\times R_e^2 \approx `r round(white_stat_spec, 1)`$.
+
+
+Sob a hipótese nula, a estatística do teste de White ($\text{LM}$) 
+segue uma distribuição $\chi_5^2$
+$\implies$ valor-p $\approx$ `r pchisq(white_stat_spec, 5, lower.tail = F) %>% round(3)`. Portanto,  Rejeitamos a hipótese nula.
+
+Conclusão: Há evidências estatisticamente significativas de 
+heterocedasticidade no nível de significância de 5%.
+
+Ok, tentamos ajustar nossa especificação, mas ainda há evidências de heterocedasticidade.
+
+**Nota:** Em geral, recorremos a erros padrão robustos à heterocedasticidade.
+
+- Os estimadores de MQO ainda são não viesados para os 
+coeficientes (os $\beta_j$'s).
+
+- Erros padrão robustos à heterocedasticidade são não viesados para os
+erros padrão dos $\hat{\beta}_j$'s, isto é, 
+$\sqrt{\mathop{\text{Var}} \left( \hat{\beta}_j \right)}$.
+
+
+Vamos retornar ao nosso modelo
+
+$$ 
+\text{Score}_i = \beta_0 + \beta_1 \text{Ratio}_i + \beta_2 \text{Income}_i + u_i 
+$$
+
+Podemos usar o pacote `lfe` de R para calcular erros padrão robustos à 
+heterocedasticidade.
+
+
+1.Execute a regressão usando a função `felm()` do pacote `lfe` 
+(em vez de `lm()`):
+
+```{r}
+library(lfe)
+
+# estima o modelo de regressao
+test_reg <- felm(test_score ~ ratio + income, data = test_df)
+```
+
+
+*Observe* que `felm()` usa a mesma sintaxe que `lm()` para esta regressão.
+
+
+2. Estime erros padrão robustos à heterocedasticidade usando o argumento 
+`robust = T` da função `summary()`:
+
+```{r}
+# erros padrão robustos à heterocedasticidade com 'robust = T'
+summary(test_reg, robust = T)
+```
+
+
+## Comparação
+
+Estimativas dos Parâmetros e **erros padrão robustos à heterocedasticidade**:
+
+```{r}
+summary(test_reg, robust = T)
+```
+
+Estimativas dos Parâmetros e  **erros padrão com MQO** 
+(assume homocedasticidade):
+
+```{r}
+summary(test_reg, robust = F)
+```
+
+
+
+
+# Exemplo: Mínimos Quadrados Ponderados 
+
+
+## Implementando WLS Manualmente
+
+Mencionamos que muitas vezes não é possível aplicar o método 
+WLS — pois precisamos saber a forma funcional da heterocedasticidade, 
+ou seja, precisamos saber:
+
+**A**. $\sigma_i^2$
+
+ou
+
+**B**. $h(x_i)$, sendo $\sigma_i^2 = \sigma^2 h(x_i)$
+
+
+Entretanto, há ocasiões em que podemos saber $h(x_i)$.
+
+Imagine que indivíduos em uma população têm erros homocedásticos.
+
+Entretanto, em vez de observar dados individuais, observamos 
+médias de grupos (por exemplo, médias de escolas, cidades, etc.).
+
+Se esses grupos tiverem tamanhos diferentes, nosso conjunto de dados será 
+heteroscedástico, de forma previsível.
+
+**Lembre-se:** A variância da média da amostra depende do tamanho da amostra,
+
+$$ 
+V(\bar{x}) = \dfrac{\sigma_x^2}{n} 
+$$
+
+**Exemplo:** Nossos dados de testes escolares são calculados em 
+média no nível da escola.
+
+*Exemplo:* São tomadas médidas dos testes no nível da escola.
+
+Mesmo que alunos individuais tenham erros homocedásticos, as escolas 
+teriam distúrbios heterocedásticos, _ou seja_,
+
+**Modelo nível-individual:** 
+
+$$
+\text{Score}_i = \beta_0 + \beta_1 \text{Ratio}_i + \beta_2 \text{Income}_i + u_i
+$$
+
+**Modelo nível-escola:** 
+
+$$
+\overline{\text{Score}}_s = \beta_0 + \beta_1 \overline{\text{Ratio}}_s + \beta_2 \overline{\text{Income}}_s + \overline{u}_s
+$$
+
+onde o subscrito $s$ denota uma escola individual (assim como $i$ denota 
+um aluno individualmente).
+
+$$ 
+\mathop{\text{Var}} \left( \overline{u}_s \right) = \dfrac{\sigma^2}{n_s} 
+$$
+
+Para WLS, estamos procurando uma função $h(x_s)$ tal que: 
+
+$$
+\mathop{\text{Var}} \left( \overline{u}_s | x_s \right) = \sigma^2 h(x_s)
+$$
+
+Supondo que os erros dos indivíduos sejam homocedásticas. 
+Acabamos de mostrar que:
+
+$$
+\mathop{\text{Var}} \left( \overline{u}_s |x_s \right) = \dfrac{\sigma^2}{n_s}
+$$
+
+Assim, $h(x_s) = 1/n_s$, onde $n_s$ é o número de alunos na escola $s$.
+
+
+Para implementar o método WLS, dividimos os dados de cada observação por 
+$1/\sqrt{h(x_s)}$, o que significa que precisamos multiplicar os dados 
+de cada escola por $\sqrt{n_s}$.
+
+A variável `enrollment` no conjunto de dados `test_df` contém $n_s$.
+
+Para estimar o modelo usando WLS : 
+
+$$
+\text{Score}_i = \beta_0 + \beta_1 \text{Ratio}_i + \beta_2 \text{Income}_i + u_i
+$$
+Seguimos os seguintes passos:
+
+**Passo 1:** Multiplique cada variável por $1/\sqrt{h(x_i)} = \sqrt{\text{Enrollment}_i}$
+
+```{r}
+# Crie variáveis transformadas, multiplicando por sqrt de 'pop'
+test_df <- mutate(test_df,
+  test_score_wls = test_score * sqrt(enrollment),
+  ratio_wls      = ratio * sqrt(enrollment),
+  income_wls     = income * sqrt(enrollment),
+  intercepto_wls  = 1 * sqrt(enrollment)
+)
+```
+
+Observe que o intercepto também foi transformado.
+
+
+**Passo 2:** Execute a regressão usando WLS:
+
+```{R, wls2}
+# regressão usando o método WLS
+wls_reg <- lm(
+  test_score_wls ~ -1 + intercepto_wls + ratio_wls + income_wls,
+  data = test_df
+)
+```
+
+
+*Nota:* O `-1` no código da regressão diz ao R para não adicionar um
+intercepto, já que estamos adicionando um intercepto transformado
+(`intercepto_wls`).
+
+As estimativas dos parâmetros e dos erros padrão por WLS:
+
+```{r}
+# visualiza os resultados
+summary(wls_reg)
+```
+
+
+## Implementando WLS usando a função `lm()`
+
+Podemos implementar WLS fornecendo os pesos para a função 
+`lm()` usando o argumento `weights`.
+
+```{r}
+lm_wls <- lm(test_score ~ ratio + income, data = test_df, weights = enrollment)
+tidy(summary(lm_wls))
+```
+
+
+Estimativas por MQO e erros padrão robustos à heterocedasticidade:
+
+```{r}
+summary(test_reg, robust = T)
+```
+
+
+
+# Conclusões
+
+Neste exemplo
+
+- Erros-padrão robustos à heterocedasticidade não alteraram muito 
+as estimativas dos erros-padrão (em relação aos erros-padrão simples 
+via MQO).
+
+- As estimativas obtidas com MQO alteraram um pouco nossas respostas — 
+coeficientes e erros-padrão.
+
+Esses exemplos destacaram algumas coisas:
+
+1. Usar o estimador correto para os erros-padrão realmente 
+importa^[Participe de um seminário de economia e você verá o que quero dizer.].
+
+2. A econometria nem sempre oferece uma rota óbvia e *correta*.
+
+
+

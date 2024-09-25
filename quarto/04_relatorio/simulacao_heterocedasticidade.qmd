@@ -1,0 +1,291 @@
+---
+title: "Modelo de Regressão Linear Múltipla"
+subtitle: "Heterocedasticidade - Simulação"
+author: Seu Nome
+lang: pt
+format:
+  html:
+    theme: cosmos
+    toc: true
+    number-sections: true
+    self-contained: true
+crossref:
+  fig-prefix: 'Fig.'
+  tbl-prefix: 'Tab.'
+execute:
+  echo: true
+  message: false
+  warning: false
+  enabled: true
+editor: source
+bibliography: referencias.bibtex
+csl: associacao-brasileira-de-normas-tecnicas-ipea.csl
+---
+
+## Simulation
+
+
+```{R, sim params, include = F}
+b0 <- 1L
+b1 <- 10L
+```
+
+Let's examine a simple linear regression model with heteroskedasticity.
+
+$$ 
+y\_i = \underbrace{\beta\_0}\_{=`r b0`} + \underbrace{\beta\_1}\_{=`r b1`} x\_i + u\_i 
+$$
+
+where $\mathop{\text{Var}} \left( u_i | x_i \right) = \sigma_i^2 = \sigma^2 x_i^2$.
+
+
+```{R, sim plot y, echo = F, fig.height = 4}
+set.seed(12345)
+ggplot(data = tibble(
+  x = runif(1e3, 0.5, 1.5),
+  y = b0 + b1 * x + rnorm(1e3, 0, sd = x^2)
+), aes(x = x, y = y)) +
+geom_point(color = "darkslategrey", size = 2.75, alpha = 0.5) +
+geom_abline(intercept = b0, slope = b1, color = "orange", size = 1.5, alpha = 0.85) +
+labs(x = "x", y = "y") +
+theme_axes_math
+```
+
+Let's examine a simple linear regression model with heteroskedasticity.
+
+$$ 
+y\_i = \underbrace{\beta\_0}\_{=`r b0`} + \underbrace{\beta\_1}\_{=`r b1`} x\_i + u\_i 
+$$
+
+where $\mathop{\text{Var}} \left( u_i | x_i \right) = \sigma_i^2 = \sigma^2 x_i^2$.
+```{R, sim plot u, echo = F, fig.height = 4}
+set.seed(12345)
+ggplot(data = tibble(
+  x = runif(1e3, 0.5, 1.5),
+  u = rnorm(1e3, 0, sd = x^2)
+), aes(x = x, y = u)) +
+geom_point(color = "darkslategrey", size = 2.75, alpha = 0.5) +
+labs(x = "x", y = "u") +
+theme_axes_math
+```
+
+*Note regarding WLS:*
+
+Since $\mathop{\text{Var}} \left( u_i | x_i \right) = \sigma^2 x_i^2$,
+
+$$ 
+\mathop{\text{Var}} \left( u_i | x_i \right) = \sigma^2 h(x_i) \implies h(x_i) = x_i^2 
+$$
+
+WLS multiplies each variable by $1/\sqrt{h(x_i)} = 1/x_i$.
+
+
+In this simulation, we want to compare
+
+1. The **efficiency** of
+  - OLS
+  - WLS with correct weights: $h(x_i) = x_i$
+  - WLS with incorrect weights: $h(x_i) = \sqrt{x_i}$
+
+2. How well our **standard errors** perform (via confidence intervals) with
+  - Plain OLS standard errors
+  - Heteroskedasticity-robust standard errors
+  - WLS standard errors
+
+
+The simulation plan:
+
+.pseudocode-small[
+
+Do 10,000 times:
+
+1. Generate a sample of size 30 from the population
+
+2. Calculate/save OLS and WLS (×2) estimates for β.sub[1]
+
+3. Calculate/save standard errors for β.sub[1] using
+  - Plain OLS standard errors
+  - Heteroskedasticity-robust standard errors
+  - WLS (correct)
+  - WLS (incorrect)
+
+]
+
+
+**For one iteration of the simulation:**
+
+Code to generate the data...
+
+```{R, sim one iteration 1, eval = F}
+# Parameters
+b0 <- 1
+b1 <- 10
+s2 <- 1
+# Sample size
+n <- 30
+# Generate data
+sample_df <- tibble(
+  x = runif(n, 0.5, 1.5),
+  y = b0 + b1 * x + rnorm(n, 0, sd = s2 * x^2)
+)
+```
+
+
+**For one iteration of the simulation:**
+
+Code to estimate our coefficients and standard errors...
+
+```{R, sim one iteration 2, eval = F}
+# OLS
+ols <- felm(y ~ x, data = sample_df)
+# WLS: Correct weights
+wls_t <- lm(y ~ x, data = sample_df, weights = 1/x^2)
+# WLS: Correct weights
+wls_f <- lm(y ~ x, data = sample_df, weights = 1/x)
+# Coefficients and standard errors
+summary(ols, robust = F)
+summary(ols, robust = T)
+summary(wls_t)
+summary(wls_f)
+```
+
+Then save the results.
+
+
+## Simulation: Coefficients
+
+```{R, sim df, include = F, cache = T}
+# Parameters
+b0 <- 1
+b1 <- 10
+s2 <- 1
+# Sample size
+n <- 30
+# Number of iterations
+n_iter <- 1e4
+# Set seed
+set.seed(1234)
+# The simulation
+sim_df <- mclapply(X = 1:n_iter, FUN = function(i, size) {
+  # Generate data
+  sample_df <- tibble(
+    x = runif(size, 0.5, 1.5),
+    y = b0 + b1 * x + rnorm(size, 0, sd = s2 * x^2)
+  )
+  # OLS
+  ols <- felm(y ~ x, data = sample_df)
+  # WLS: Correct weights
+  wls_t <- lm(y ~ x, data = sample_df, weights = 1/x^2)
+  # WLS: Correct weights
+  wls_f <- lm(y ~ x, data = sample_df, weights = 1/x)
+  # Save results
+  iter_df <- rbind(
+    summary(ols, robust = F) %>% coef() %>% magrittr::extract(2,1:2),
+    summary(ols, robust = T) %>% coef() %>% magrittr::extract(2,1:2),
+    summary(wls_t) %>% coef() %>% magrittr::extract(2,1:2),
+    summary(wls_f) %>% coef() %>% magrittr::extract(2,1:2)
+  ) %>%
+  as_tibble() %>%
+  mutate(
+    model = c("OLS Hom.", "OLS Het.", "WLS T", "WLS F"),
+    iter = i
+  )
+  # Return the data
+  return(iter_df)
+}, mc.cores = 3, size = n) %>% bind_rows()
+# Change names
+names(sim_df) <- c("coef", "se", "model", "iter")
+```
+
+```{R, sim plot efficiency, echo = F, fig.height = 6.25}
+ggplot(data = sim_df %>% filter(model != "OLS Hom."), aes(x = coef, color = model, fill = model)) +
+geom_vline(xintercept = 10, linetype = "dashed") +
+geom_density(alpha = 0.1) +
+geom_hline(yintercept = 0) +
+labs(x = "Estimated coefficient", y = "Density") +
+scale_color_viridis_d("",
+  labels = c("OLS", "WLS Incorrect", "WLS Correct"),
+  end = 0.9, option = "C"
+) +
+scale_fill_viridis_d("",
+  labels = c("OLS", "WLS Incorrect", "WLS Correct"),
+  end = 0.9, option = "C"
+) +
+theme_pander(base_size = 22, base_family = "Fira Sans") +
+theme(
+  legend.position = c(.85,.9),
+  # legend.background = element_blank(),
+  legend.key.size = unit(1, "cm")
+)
+```
+
+
+## Simulation: Inference
+
+```{R, sim plot t stat, echo = F, fig.height = 6.25}
+ggplot(data = sim_df, aes(x = (coef-10)/se, color = model, fill = model)) +
+geom_vline(xintercept = qt(c(0.025, 0.975), df = 28), linetype = "dashed") +
+geom_density(alpha = 0.1) +
+geom_hline(yintercept = 0) +
+labs(x = "t statistic testing the true value", y = "Density") +
+scale_color_viridis_d("",
+  labels = c("OLS + Het.-robust", "Plain OLS", "WLS Incorrect", "WLS Correct"),
+  end = 0.9, option = "C"
+) +
+scale_fill_viridis_d("",
+labels = c("OLS + Het.-robust", "Plain OLS", "WLS Incorrect", "WLS Correct"),
+  end = 0.9, option = "C"
+) +
+theme_pander(base_size = 22, base_family = "Fira Sans") +
+theme(
+  legend.position = c(.85,.9),
+  # legend.background = element_blank(),
+  legend.key.size = unit(1, "cm")
+)
+```
+---
+layout: false
+# Living with heteroskedasticity
+## Simulation: Results
+
+Summarizing our simulation results (10,000 iterations)
+
+.pull-left[
+<center>
+**Estimation**: Summary of $\hat{\beta}_1$'s
+</center>
+```{R, sim table coef, eval = T, echo = F}
+sim_df %>%
+  filter(model != "OLS Hom.") %>%
+  mutate(Estimator = recode(model,
+    "OLS Het." = "OLS",
+    "WLS F" = "WLS Incorrect",
+    "WLS T" = "WLS Correct"
+  )) %>%
+  group_by(Estimator) %>%
+  summarize(Mean = mean(coef) %>% round(3), "S.D." = sd(coef) %>% round(3)) %>%
+  kable() %>%
+  kable_styling(full_width = T)
+```
+]
+
+--
+
+.pull-right[
+<center>
+**Inference:** % of times we reject $\beta_1$
+</center>
+```{R, sim table se, eval = T, echo = F}
+sim_df %>%
+  mutate(Estimators = recode(model,
+    "OLS Hom." = "OLS + Homosk.",
+    "OLS Het." = "OLS + Het.-robust",
+    "WLS F" = "WLS Incorrect",
+    "WLS T" = "WLS Correct"
+  )) %>%
+  group_by(Estimators) %>%
+  summarize(`% Reject` = mean(abs(coef-10)/se > qt(0.975, 28)) %>% multiply_by(100) %>% round(1)) %>%
+  kable() %>%
+  kable_styling(full_width = T)
+```
+]
