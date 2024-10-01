@@ -1,0 +1,180 @@
+---
+title: "Resolução da Avaliação 1"
+subtitle: "Econometria Aplicada à Finanças"
+author: "SEUS NOMES"
+title-block-banner: "#27445C"
+format:
+  html:
+    embed-resources: true
+    toc: true
+    toc-location: left
+lang: "pt"
+date: today
+date-format: long
+execute: 
+  echo: false
+  warning: false
+  message: false
+crossref:
+  fig-prefix: 'Fig.'
+  tbl-prefix: 'Tab.'
+bibliography: referencias.bibtex
+csl: associacao-brasileira-de-normas-tecnicas-ipea.csl
+---
+
+```{r}
+#| label: setup
+
+# pacotes utilizados
+library(here)
+library(tidyverse)
+```
+
+
+
+
+## Questão 1 - Questões Conceituais
+
+
+**a.**
+
+
+**b.** 
+
+
+**c.** 
+
+
+**d.** 
+
+
+**e.** 
+
+
+**f.** 
+
+
+**g.** 
+
+
+**h.** 
+
+
+**i.** 
+
+
+**j.** 
+
+
+**l.** 
+
+
+**m.** 
+
+
+**n.**
+
+
+**o.** 
+
+
+**p.** 
+
+
+**q.** 
+
+
+**r.** 
+
+
+
+
+## Questão 2 - Análise 
+
+
+**a.** Baixe o arquivo de dados `bertrand2004.csv`. Coloque o arquivo na 
+subpasta `data/raw` do seu projeto `ecnt2024_mpa`. 
+Importe este arquivo utilizando o pacote `here` e a função apropiada do 
+pacote `readr`. Qual a dimensão dos dados importados. 
+
+
+
+**b.** Quais são os dois primeiros *primeiros nomes* no conjunto de dados 
+(variável `first_name`)?
+
+
+
+**c.** Qual é a porcentagem de currículos que receberam um retorno (variável 
+`i_callback`)?
+
+
+
+
+**d.** Calcule a porcentagem de retornos (_isto é_, a média de 
+`i_callback`) para cada grupo racial (`race`). Parece que os empregadores 
+consideraram a raça do candidato ao fazer os retornos? Explique.
+
+
+
+**e.** Qual é a diferença na taxa média de retorno entre os grupos?
+
+
+
+**f.** Com base na diferença nas porcentagens que observamos no item **d**, 
+podemos concluir que os empregadores consideram a raça nas decisões de 
+contratação? **Explique sua resposta.**
+
+
+
+**g.** Sem estimar uma regressão, realize um teste estatístico para a 
+diferença nas taxas médias de retorno entre os dois grupos (_isto é_, 
+teste se a proporção de retornos é igual para os dois grupos).
+
+
+
+
+**h.** Agora faça a regressão de `i_callback` (se o currículo gerou um retorno) 
+contra `i_black` (se o nome do currículo indicava um candidato negro). Reporte 
+a estimativa do parâmetro de `i_black`. Ele corresponde à diferença que 
+você encontrou em **e**?
+
+
+**i.** Realize um teste *t* para o coeficiente de `i_black` na regressão 
+feita no item **f**. Escreva suas hipóteses (tanto $H_0$ quanto $H_A$), 
+a estatística do teste, o valor-p, o resultado do teste (isto é, 
+rejeitar ou não rejeitar $H_0$), e sua conclusão.
+
+
+
+**j.** Agora faça a regressão de `i_callback` (se o currículo gerou um 
+retorno) contra `i_black`, `n_expr` (anos de experiência) e a interação 
+entre `i_black` e `n_expr`. Interprete as estimativas dos coeficientes 
+(tanto o significado dos coeficientes quanto se eles são estatisticamente 
+significativos).
+
+
+
+
+
+## Questão 3 - Pensando sobre Causalidade
+
+
+**a.** 
+
+
+**b.** 
+
+
+**c.** 
+
+
+
+
+
+## Referências
+
+::: {#refs}
+:::
+
+
+
